@@ -59,8 +59,8 @@ public class AuthenticatorActivity extends AppCompatActivity {
 
 
 
-                editor.putString("token",identityProvider.getToken());
-                editor.commit();
+                /*editor.putString("token",identityProvider.getToken());
+                editor.commit();*/
                 // Go to the main activity
                 final Intent intent = new Intent(activity, MainActivity.class)
                         .setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
