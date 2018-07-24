@@ -59,6 +59,7 @@ public class AuthenticatorActivity extends AppCompatActivity {
 
 
 
+
                 /*editor.putString("token",identityProvider.getToken());
                 editor.commit();*/
                 // Go to the main activity

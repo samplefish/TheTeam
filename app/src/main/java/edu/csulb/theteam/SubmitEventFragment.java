@@ -27,20 +27,26 @@ import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.amazonaws.auth.CognitoCachingCredentialsProvider;
+import com.amazonaws.mobileconnectors.cognitoidentityprovider.CognitoUserAttributes;
+import com.amazonaws.mobileconnectors.cognitoidentityprovider.CognitoUserDetails;
+import com.amazonaws.mobileconnectors.cognitoidentityprovider.handlers.GetDetailsHandler;
 import com.amazonaws.mobileconnectors.dynamodbv2.dynamodbmapper.DynamoDBMapper;
 import com.amazonaws.mobileconnectors.dynamodbv2.dynamodbmapper.DynamoDBScanExpression;
+import com.amazonaws.mobileconnectors.dynamodbv2.dynamodbmapper.PaginatedScanList;
 import com.amazonaws.mobileconnectors.s3.transferutility.TransferObserver;
 import com.amazonaws.mobileconnectors.s3.transferutility.TransferUtility;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
 import com.amazonaws.services.dynamodbv2.model.AttributeValue;
 import com.amazonaws.services.s3.AmazonS3Client;
-import com.facebook.AccessToken;
 
 import java.io.File;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+
+import edu.csulb.models.nosql.EventsDO;
 
 import static android.app.Activity.RESULT_OK;
 
@@ -48,7 +54,7 @@ import static android.app.Activity.RESULT_OK;
 /**
  * A simple {@link Fragment} subclass.
  */
-public class SubmitItemFragment extends Fragment {
+public class SubmitEventFragment extends Fragment {
 
     private static final int RESULT_LOAD_IMAGE = 1;
 
@@ -56,7 +62,7 @@ public class SubmitItemFragment extends Fragment {
 
     EditText etItemName;
     EditText etDescription;
-    EditText etPrice;
+    EditText etIGN;
     Spinner typeSpinner;
 
     Button submit;
@@ -67,14 +73,20 @@ public class SubmitItemFragment extends Fragment {
     String pictureLink;
     String itemID;
     String itemType;
+    String ign;
 
     View v;
-
-    //List<ItemsMapperClass> result;
+    PaginatedScanList<EventsDO> result;
     Integer resultSize;
     ProgressDialog progress;
 
     SharedPreferences prefs;
+
+    DynamoDBMapper mapper;
+
+    Map<String, String> attributes;
+
+    CognitoUserDetails CUD;
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -87,43 +99,27 @@ public class SubmitItemFragment extends Fragment {
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-
+        mapper = AWSProvider.getInstance().getDynamoDBMapper();
         v = getView();
 
         etItemName = (EditText) v.findViewById(R.id.etItemName);
         etDescription = (EditText) v.findViewById(R.id.etDescription);
-        etPrice= (EditText)v.findViewById(R.id.etPrice);
-        typeSpinner = (Spinner) v.findViewById(R.id.spinner);
+        etIGN= (EditText)v.findViewById(R.id.etIGN);
 
-        typeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                itemType = parent.getItemAtPosition(position).toString();
-            }
 
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-                itemType = "No type selected";
-            }
-        });{
-
-        };
         submit = (Button) v.findViewById(R.id.bSubmit);
 
-
-        pictureLink = "chicken.jpg";
-
-
-
+        //new retrieveUser().execute();
 
         submit.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if(itemType != "No item selected"){
                     name = etItemName.getText().toString();
-                    price = Double.parseDouble(etPrice.getText().toString());
+                    //price = Double.parseDouble(etPrice.getText().toString());
                     description = etDescription.getText().toString();
-                    new SubmitItemFragment.checkItems().execute();
+                    ign = etIGN.getText().toString();
+                    new SubmitEventFragment.checkItems().execute();
                 }
                 else{
                     Toast.makeText(getActivity(), "Please select a type", Toast.LENGTH_SHORT).show();
@@ -136,24 +132,21 @@ public class SubmitItemFragment extends Fragment {
 
     private class checkItems extends AsyncTask<Void, Integer, Integer> {
         protected void onPreExecute(){
-            progress = new ProgressDialog(getActivity());
-            progress.setMessage("Working...");
-            progress.show();
+            //progress = new ProgressDialog(getActivity());
+            //progress.setMessage("Working...");
+            //progress.show();
         }
         protected Integer doInBackground(Void... params){
-            ManagerClass managerClass = new ManagerClass();
-            CognitoCachingCredentialsProvider credentialsProvider = new CognitoCachingCredentialsProvider(
-                    getActivity().getApplicationContext(),
-                    "us-east-1:6ec4d10e-5eff-4422-8388-af344a4a3923", // Identity pool ID
-                    Regions.US_EAST_1 // Region
-            );
-            AmazonDynamoDBClient ddbClient = new AmazonDynamoDBClient(credentialsProvider);
-            DynamoDBMapper mapper = new DynamoDBMapper(ddbClient);
+
+
+            EventsDO template = new EventsDO();
+            template.setUserId(AWSProvider.getInstance().getIdentityManager().getCachedUserID());
+
 
             Map<String, AttributeValue> eav = new HashMap<String, AttributeValue>();
-            eav.put(":val1", new AttributeValue().withS(userID));
-            DynamoDBScanExpression scanExpression = new DynamoDBScanExpression().withFilterExpression("userID = :val1").withExpressionAttributeValues(eav);
-            result = mapper.scan(ItemsMapperClass.class, scanExpression);
+            eav.put(":val1", new AttributeValue().withS(template.getUserId()));
+            DynamoDBScanExpression scanExpression = new DynamoDBScanExpression().withFilterExpression("userId = :val1").withExpressionAttributeValues(eav);
+            result = mapper.scan(EventsDO.class, scanExpression);
 
             return 1;
         }
@@ -164,51 +157,72 @@ public class SubmitItemFragment extends Fragment {
             if(integer == 1){
                 if(result != null){
                     resultSize = result.size();
-                    new SubmitItemFragment.updateTable().execute();
+                    new SubmitEventFragment.updateTable().execute();
                 }
             }
         }
     }
 
+    /*private class retrieveUser extends AsyncTask<Void, Integer, Integer>{
+        @Override
+        protected Integer doInBackground(Void... params){
+            /*AWSProvider.getInstance().getCognitoUserPool().getUser().getDetails(new GetDetailsHandler(){
+                public void onSuccess(CognitoUserDetails details){
+                    attributes = details.getAttributes().getAttributes();
+                    Toast.makeText(getActivity(), "Retrieved username: " + attributes.get("username"), Toast.LENGTH_SHORT).show();
+                }
+
+                public void onFailure(Exception e){
+                    Log.e("failed to get details", "fuck!");
+
+
+                }
+            });
+            GetDetailsHandler handler = new GetDetailsHandler() {
+                @Override
+                public void onSuccess(final CognitoUserDetails list) {
+                    CUD = list;
+                }
+
+                @Override
+                public void onFailure(final Exception exception) {
+                    exception.getCause();
+                }
+            };
+            AWSProvider.getInstance().getCognitoUserPool().getCurrentUser().getDetails(handler);
+            return 1;
+        }
+    }*/
+
     private class updateTable extends AsyncTask<Void, Integer, Integer>{
         @Override
         protected Integer doInBackground(Void... params){
-
-            ManagerClass managerClass = new ManagerClass();
-            CognitoCachingCredentialsProvider credentialsProvider = new CognitoCachingCredentialsProvider(
-                    getActivity().getApplicationContext(),
-                    "us-east-1:6ec4d10e-5eff-4422-8388-af344a4a3923", // Identity pool ID
-                    Regions.US_EAST_1 // Region
-            );
-            AmazonDynamoDBClient ddbClient = new AmazonDynamoDBClient(credentialsProvider);
-            DynamoDBMapper mapper = new DynamoDBMapper(ddbClient);
+            /*userID = AWSProvider.getInstance().getIdentityManager().getCachedUserID();
 
             Map<String, AttributeValue> eav = new HashMap<String, AttributeValue>();
             eav.put(":val1", new AttributeValue().withS(userID));
-            DynamoDBScanExpression scanExpression = new DynamoDBScanExpression().withFilterExpression("userID = :val1").withExpressionAttributeValues(eav);
-            result = mapper.scan(ItemsMapperClass.class, scanExpression);
-
-            AccessToken accessToken = AccessToken.getCurrentAccessToken();
-            String userID = accessToken.getUserId();
-
-            ItemsMapperClass itemMapper = new ItemsMapperClass();
-            itemMapper.setItemName(name);
-            itemMapper.setPrice(price);
-            itemMapper.setDescription(description);
-            itemMapper.setItemID(userID+""+resultSize);
-            itemMapper.setPictureLink(pictureLink);
-            itemMapper.setItemType(itemType);
-            itemMapper.setUsername(prefs.getString("userName",null));
+            DynamoDBScanExpression scanExpression = new DynamoDBScanExpression().withFilterExpression("userId = :val1").withExpressionAttributeValues(eav);
+            result = mapper.scan(EventsDO.class, scanExpression);
+*/
 
 
-            itemMapper.setUserID(userID);
-            String email = prefs.getString("email", null);
-            itemMapper.setEmail(email);
+            EventsDO eventMapper = new EventsDO();
 
-            if(credentialsProvider != null && itemMapper != null){
+            eventMapper.setEventId(UUID.randomUUID().toString());
+            eventMapper.setUserId(AWSProvider.getInstance().getIdentityManager().getCachedUserID());
+            eventMapper.setEventDescription(description);
+            eventMapper.setUserIGN(ign);
+            //eventMapper.setEventDescription(attributes.get("Username"));
 
-                DynamoDBMapper dynamoDBMapper = managerClass.intiDynamoClient(credentialsProvider);
-                dynamoDBMapper.save(itemMapper);
+
+
+
+            eventMapper.setEventName(name);
+            //String email = prefs.getString("email", null);
+            //itemMapper.setEmail(email);
+
+            if(eventMapper != null){
+                mapper.save(eventMapper);
             }
 
 
@@ -219,9 +233,9 @@ public class SubmitItemFragment extends Fragment {
             if(integer ==1)
             {
                 Toast.makeText(getActivity(), "Your item has been added.", Toast.LENGTH_SHORT).show();
-                progress.dismiss();
-                getFragmentManager().beginTransaction().replace(R.id.content_frame,
-                        new FirstFragment()).commit();
+                //progress.dismiss();
+                getFragmentManager().beginTransaction().replace(R.id.fragment,
+                        new EventsFragment()).commit();
                 InputMethodManager imm = (InputMethodManager) getActivity().getSystemService(Context.INPUT_METHOD_SERVICE);
                 imm.hideSoftInputFromWindow(v.getWindowToken(), 0);
             }

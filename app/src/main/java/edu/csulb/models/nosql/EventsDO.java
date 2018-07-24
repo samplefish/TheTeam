@@ -15,11 +15,9 @@ import java.util.Set;
 
 public class EventsDO {
     private String _eventId;
-    private Set<String> _currentParticipants;
+    private String _eventDescription;
     private String _eventName;
-    private String _eventTime;
-    private Boolean _isLimited;
-    private Double _maxParticipants;
+    private String _userIGN;
     private String _userId;
 
     @DynamoDBHashKey(attributeName = "eventId")
@@ -31,13 +29,13 @@ public class EventsDO {
     public void setEventId(final String _eventId) {
         this._eventId = _eventId;
     }
-    @DynamoDBAttribute(attributeName = "currentParticipants")
-    public Set<String> getCurrentParticipants() {
-        return _currentParticipants;
+    @DynamoDBAttribute(attributeName = "eventDescription")
+    public String getEventDescription() {
+        return _eventDescription;
     }
 
-    public void setCurrentParticipants(final Set<String> _currentParticipants) {
-        this._currentParticipants = _currentParticipants;
+    public void setEventDescription(final String _eventDescription) {
+        this._eventDescription = _eventDescription;
     }
     @DynamoDBAttribute(attributeName = "eventName")
     public String getEventName() {
@@ -47,29 +45,13 @@ public class EventsDO {
     public void setEventName(final String _eventName) {
         this._eventName = _eventName;
     }
-    @DynamoDBAttribute(attributeName = "eventTime")
-    public String getEventTime() {
-        return _eventTime;
+    @DynamoDBAttribute(attributeName = "userIGN")
+    public String getUserIGN() {
+        return _userIGN;
     }
 
-    public void setEventTime(final String _eventTime) {
-        this._eventTime = _eventTime;
-    }
-    @DynamoDBAttribute(attributeName = "isLimited")
-    public Boolean getIsLimited() {
-        return _isLimited;
-    }
-
-    public void setIsLimited(final Boolean _isLimited) {
-        this._isLimited = _isLimited;
-    }
-    @DynamoDBAttribute(attributeName = "maxParticipants")
-    public Double getMaxParticipants() {
-        return _maxParticipants;
-    }
-
-    public void setMaxParticipants(final Double _maxParticipants) {
-        this._maxParticipants = _maxParticipants;
+    public void setUserIGN(final String _userIGN) {
+        this._userIGN = _userIGN;
     }
     @DynamoDBAttribute(attributeName = "userId")
     public String getUserId() {

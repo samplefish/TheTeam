@@ -3,6 +3,7 @@ package edu.csulb.theteam;
 import android.app.Dialog;
 import android.content.Context;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 
 import android.app.Fragment;
@@ -10,58 +11,51 @@ import android.support.v7.widget.CardView;
 import android.support.v7.widget.LinearLayoutManager;
 
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 
+import android.widget.ImageView;
 import android.widget.TextView;
 
 
+import com.amazonaws.auth.CognitoCachingCredentialsProvider;
+import com.amazonaws.mobileconnectors.dynamodbv2.dynamodbmapper.DynamoDBMapper;
+import com.amazonaws.mobileconnectors.dynamodbv2.dynamodbmapper.DynamoDBScanExpression;
+import com.amazonaws.mobileconnectors.dynamodbv2.dynamodbmapper.PaginatedScanList;
+import com.amazonaws.regions.Regions;
+import com.amazonaws.services.dynamodbv2.AmazonDynamoDBClient;
+import com.amazonaws.services.dynamodbv2.model.AttributeValue;
+import com.amazonaws.services.dynamodbv2.model.ScanRequest;
 import com.amazonaws.services.dynamodbv2.model.ScanResult;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
-/**
- * A simple {@link Fragment} subclass.
- * Activities that contain this fragment must implement the
+import edu.csulb.models.nosql.EventsDO;
 
- * to handle interaction events.
- * Use the {@link EventsFragment#newInstance} factory method to
- * create an instance of this fragment.
- */
+
+
 public class EventsFragment extends Fragment {
-    // TODO: Rename parameter arguments, choose names that match
-    // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
     Button newPostButton;
     Dialog progress;
-    ScanResult result;
+
     RecyclerView recyclerView;
 
+    PaginatedScanList<EventsDO> result;
+    DynamoDBMapper mapper;
 
 
-
-    //private OnFragmentInteractionListener mListener;
 
     public EventsFragment() {
         // Required empty public constructor
     }
 
-    /**
-     * Use this factory method to create a new instance of
-     * this fragment using the provided parameters.
-     *
-     * @param param1 Parameter 1.
-     * @param param2 Parameter 2.
-     * @return A new instance of fragment EventsFragment.
-     */
-    // TODO: Rename and change types and number of parameters
-    public static EventsFragment newInstance(String param1, String param2) {
-        EventsFragment fragment = new EventsFragment();
-        Bundle args = new Bundle();
-
-        fragment.setArguments(args);
-        return fragment;
-    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -71,7 +65,7 @@ public class EventsFragment extends Fragment {
         }
     }
 
-    /*public void onActivityCreated(Bundle savedInstanceState) {
+    public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
         View v = getView();
         newPostButton = (Button) v.findViewById(R.id.postFeedButton);
@@ -79,85 +73,150 @@ public class EventsFragment extends Fragment {
         newPostButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                getFragmentManager().beginTransaction().replace(R.id.content_frame,
-                        new SubmitItemFragment()).commit();
+                getFragmentManager().beginTransaction().replace(R.id.fragment,
+                        new SubmitEventFragment()).commit();
             }
         });
-    }*/
+    }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
         View view = inflater.inflate(R.layout.fragment_events, container, false);
         recyclerView = (RecyclerView) view.findViewById(R.id.recycler_view);
         recyclerView.setLayoutManager(new LinearLayoutManager(getActivity()));
 
-        //TODO check items query
+        mapper = AWSProvider.getInstance().getDynamoDBMapper();
+
+        new getUserEvents().execute();
         return view;
     }
-
-    // TODO: Rename method, update argument and hook method into UI event
-    /*public void onButtonPressed(Uri uri) {
-        if (mListener != null) {
-            mListener.onFragmentInteraction(uri);
-        }
-    }*/
 
     private class RecyclerViewHolder extends RecyclerView.ViewHolder {
         private CardView mCardView;
         private TextView mTypeView;
         private TextView mNameView;
         private TextView mDescription;
+        private String itemID;
         private TextView mEmail;
-        private TextView mPriceView;
+        private ImageView mImageView;
+        private TextView mIGN;
 
+        public View view;
+
+        private TextView mPriceView;
         public RecyclerViewHolder(View itemView) {
             super(itemView);
+            /*view = itemView;
+            view.setOnClickListener(new View.OnClickListener(){
+                @Override
+                public void onClick(View itemView){
+                    getFragmentManager().beginTransaction().replace(R.id.content_frame,
+                            new ViewItemFragment()).commit();
+                }
+            });*/
+
         }
 
         public RecyclerViewHolder(LayoutInflater inflater, ViewGroup container) {
             super(inflater.inflate(R.layout.card_view, container, false));
-
-            mCardView = (CardView) itemView.findViewById(R.id.card_view);
             mNameView = (TextView) itemView.findViewById(R.id.title);
             mDescription = (TextView) itemView.findViewById(R.id.description);
-            //mPriceView = (TextView) itemView.findViewById(R.id.price);
+            mImageView = (ImageView) itemView.findViewById(R.id.thumbnail);
+            mIGN = (TextView) itemView.findViewById(R.id.userIGN);
+
+
 
         }
     }
 
-    //@Override
-    /*public void onAttach(Context context) {
-        super.onAttach(context);
-        if (context instanceof OnFragmentInteractionListener) {
-            mListener = (OnFragmentInteractionListener) context;
-        } else {
-            throw new RuntimeException(context.toString()
-                    + " must implement OnFragmentInteractionListener");
+    private class RecyclerViewAdapter extends RecyclerView.Adapter<RecyclerViewHolder> {
+        private List<EventsDO> result;
+
+        public RecyclerViewAdapter(ArrayList<EventsDO> result) {
+            this.result = result;
+        }
+
+        @Override
+        public RecyclerViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+            LayoutInflater inflater = LayoutInflater.from(getActivity());
+            View view = LayoutInflater.from(getActivity().getApplicationContext()).inflate(R.layout.fragment_events, parent, false);
+            view.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    int itemPosition = recyclerView.indexOfChild(v);
+                    getFragmentManager().beginTransaction().replace(R.id.fragment,
+                            new EventsFragment()).commit();
+                }
+            });
+            return new RecyclerViewHolder(inflater, parent);
+        }
+
+
+
+        public void onBindViewHolder(RecyclerViewHolder holder, int position) {
+
+            holder.mNameView.setText(result.get(position).getEventName());
+            holder.mDescription.setText(result.get(position).getEventDescription());
+            holder.mIGN.setText("IGN: "+result.get(position).getUserIGN());
+            String n = result.get(position).getEventName();
+            if(n.contains("league")){
+                holder.mImageView.setImageResource(R.drawable.league);
+            }
+            if(n.contains("fort")){
+                holder.mImageView.setImageResource(R.drawable.fortnite);
+            }
+
+        }
+
+        @Override
+        public int getItemCount() {
+            return result.size();
+        }
+
+
+    }
+
+    public class getUserEvents extends AsyncTask<Void, Integer, Integer> {
+        protected void onPreExecute() {
+            /*progress = new ProgressDialog(getActivity());
+            progress.setMessage("Working...");
+            progress.show();*/
+        }
+
+        protected Integer doInBackground(Void... params) {
+
+            Map<String, AttributeValue> eav = new HashMap<String, AttributeValue>();
+            eav.put(":val1", new AttributeValue().withS(AWSProvider.getInstance().getIdentityManager().getCachedUserID()));
+
+            DynamoDBScanExpression scanExpression = new DynamoDBScanExpression().withFilterExpression("userId = :val1").withExpressionAttributeValues(eav);
+
+            result = mapper.scan(EventsDO.class, scanExpression);
+
+            return 1;
+        }
+
+        @Override
+        protected void onPostExecute(Integer integer) {
+            super.onPostExecute(integer);
+            if(result.size()!=0){
+                Log.e("gotten the thing: ", "brains!!!");
+            }
+            else{
+                Log.e("ugh, dthe size is ", result.size()+"");
+            }
+            result.loadAllResults();
+            ArrayList<EventsDO> resultList = new ArrayList<EventsDO>(result.size());
+            Iterator<EventsDO> iterator = result.iterator();
+            while(iterator.hasNext()){
+                EventsDO element = iterator.next();
+                resultList.add(element);
+            }
+
+
+            recyclerView.setAdapter(new RecyclerViewAdapter(resultList));
         }
     }
-
-    @Override
-    public void onDetach() {
-        super.onDetach();
-        mListener = null;
-    }
-
-    /**
-     * This interface must be implemented by activities that contain this
-     * fragment to allow an interaction in this fragment to be communicated
-     * to the activity and potentially other fragments contained in that
-     * activity.
-     * <p>
-     * See the Android Training lesson <a href=
-     * "http://developer.android.com/training/basics/fragments/communicating.html"
-     * >Communicating with Other Fragments</a> for more information.
-     */
-    /*public interface OnFragmentInteractionListener {
-        // TODO: Update argument type and name
-        void onFragmentInteraction(Uri uri);
-    }*/
 
 
 }
